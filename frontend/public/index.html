@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detector de objetos en video</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="encabezado">
+        <h1>Detector de objetos en video</h1>
+        <p>Sube un video y te diremos qué objetos aparecen en él y cuántos se detectaron.</p>
+    </header>
+
+    <main class="contenedor">
+        <!-- Carga del video -->
+        <section class="tarjeta">
+            <h2>1. Selecciona un video</h2>
+            <input type="file" id="video-input" accept="video/*">
+            <p id="archivo-nombre" class="suave" hidden></p>
+
+            <video id="preview" class="preview" controls preload="auto" playsinline hidden></video>
+
+            <div class="opciones">
+                <label>
+                    Frames por segundo a analizar
+                    <select id="fps">
+                        <option value="0.5">0.5 (más rápido)</option>
+                        <option value="1" selected>1 (recomendado)</option>
+                        <option value="2">2 (más detallado)</option>
+                    </select>
+                </label>
+            </div>
+
+            <button id="btn-analizar" class="boton" disabled>Analizar video</button>
+
+            <div id="progreso-bloque" hidden>
+                <progress id="progreso" value="0" max="100"></progress>
+                <p id="progreso-texto" class="suave"></p>
+            </div>
+            <p id="error" class="error" hidden></p>
+        </section>
+
+        <!-- Resultados -->
+        <section id="resultados" class="tarjeta" hidden>
+            <div class="cabecera-resultados">
+                <h2>2. Resultados</h2>
+                <label>
+                    Tipo de resultado
+                    <select id="tipo-resultado">
+                        <option value="conteo" selected>Conteo</option>
+                        <option value="reporte">Reporte</option>
+                    </select>
+                </label>
+            </div>
+
+            <!-- Vista: conteo -->
+            <div id="vista-conteo">
+                <div class="metricas">
+                    <div class="metrica">
+                        <span class="metrica-valor" id="total-objetos">0</span>
+                        <span class="metrica-etiqueta">Objetos detectados</span>
+                    </div>
+                    <div class="metrica">
+                        <span class="metrica-valor" id="total-clases">0</span>
+                        <span class="metrica-etiqueta">Tipos de objeto</span>
+                    </div>
+                    <div class="metrica">
+                        <span class="metrica-valor" id="total-frames">0</span>
+                        <span class="metrica-etiqueta">Frames analizados</span>
+                    </div>
+                </div>
+
+                <h3>Descripción</h3>
+                <p id="descripcion" class="descripcion"></p>
+
+                <h3>Conteo por tipo de objeto</h3>
+                <div class="tabla-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Objeto</th>
+                                <th>Máximo a la vez</th>
+                                <th>Apariciones</th>
+                                <th>Visible entre</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-conteo"></tbody>
+                    </table>
+                </div>
+
+                <p class="suave nota">
+                    "Máximo a la vez" es el mayor número de objetos de un mismo tipo visibles en un mismo frame.
+                    Es una aproximación: sin seguimiento entre frames, un mismo objeto puede contarse una sola vez
+                    aunque aparezca en varios.
+                </p>
+            </div>
+
+            <!-- Vista: reporte -->
+            <div id="vista-reporte" hidden>
+                <h3>Descripción</h3>
+                <p id="descripcion-reporte" class="descripcion"></p>
+
+                <h3>Objetos encontrados</h3>
+                <p id="total-reporte" class="suave"></p>
+                <div class="tabla-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tiempo</th>
+                                <th>Objeto</th>
+                                <th>Confianza</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-reporte"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="pie">
+        <button id="btn-health" class="boton secundario">Comprobar servicios</button>
+        <span id="estado-servicios" class="suave"></span>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

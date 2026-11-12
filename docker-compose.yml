@@ -1,0 +1,61 @@
+name: detector-objetos-video
+
+# Orquestación principal del proyecto.
+#   frontend -> Apache (HTML/JS). Sirve la web y hace proxy de /api/ al backend.
+#   backend  -> PHP 8.3 + Apache. services.php elige la función con ?servicio=...
+#   motor    -> Python + FastAPI. Motor de IA (detección de objetos).
+#
+# Uso:  docker compose up --build
+# Web:  http://localhost:8080
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: dov-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: dov-backend
+    environment:
+      MOTOR_URL: http://motor:8000
+    depends_on:
+      - motor
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  db:
+    build: ./db
+    container_name: dov-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass_dev
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  motor:
+    build: ./motor
+    container_name: dov-motor
+    environment:
+      MODEL_PATH: /app/models/modelo.pt
+    volumes:
+      - ./motor/models:/app/models
+    networks:
+      - app-net
+    restart: unless-stopped
+
+volumes:
+  db-data:
+
+networks:
+  app-net:
+    driver: bridge
