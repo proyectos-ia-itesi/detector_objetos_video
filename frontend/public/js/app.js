@@ -1,12 +1,12 @@
 // Frontend del detector de objetos en video.
-// 1) El navegador extrae frames del video a la frecuencia elegida.
-// 2) Cada frame se envía al backend (services.php?servicio=detect).
-// 3) Se agregan los resultados y se muestran conteos, línea de tiempo y descripción.
+// 1) El usuario agrega videos a la biblioteca y elige uno.
+// 2) El navegador extrae frames del video a la frecuencia elegida.
+// 3) Cada frame se envía al backend (services.php?servicio=detect), varios en paralelo.
+// 4) Se agregan los resultados y se muestran conteos, línea de tiempo y descripción.
 
 const API = '/api/services.php';
-const MAX_FRAMES = 300;          // límite de seguridad para videos largos
-const ANCHO_MAXIMO = 640;        // ancho de los frames enviados (reduce el tamaño)
-const CONFIANZA_MINIMA = 0.5;    // confianza mínima interna (ya no se muestra en la interfaz)
+const ANCHO_MAXIMO_FRAME = 1280;   // tope de seguridad para el ancho del frame enviado
+const CONCURRENCIA = 4;            // peticiones de detección simultáneas
 
 // Traducción de las clases más comunes (nombres COCO). Si no está, se muestra tal cual.
 const TRADUCCIONES = {
@@ -24,62 +24,212 @@ const TRADUCCIONES = {
 
 const $ = (id) => document.getElementById(id);
 
-let urlVideo = null;
+// ---------- Biblioteca de videos (panel izquierdo) ----------
 
-// ---------- Eventos de la interfaz ----------
+let biblioteca = [];        // videos agregados en esta sesión: { id, archivo, url? }
+let contadorId = 0;
+let seleccionadoId = null;  // video elegido; se muestra en el visor central
 
 $('video-input').addEventListener('change', (e) => {
-    const archivo = e.target.files[0];
-    if (!archivo) return;
+    for (const archivo of e.target.files) {
+        biblioteca.push({ id: ++contadorId, archivo });
+    }
+    e.target.value = '';    // permite volver a agregar el mismo archivo
+    renderizarLista();
+});
 
-    if (urlVideo) URL.revokeObjectURL(urlVideo);
-    urlVideo = URL.createObjectURL(archivo);
+function renderizarLista() {
+    const lista = $('lista-videos');
+    lista.replaceChildren();
+
+    for (const { id, archivo } of biblioteca) {
+        const activo = id === seleccionadoId;
+
+        const li = document.createElement('li');
+        li.className = 'video-item' + (activo ? ' seleccionado' : '');
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', String(activo));
+        li.tabIndex = 0;
+
+        const nombre = document.createElement('span');
+        nombre.className = 'video-nombre';
+        nombre.textContent = archivo.name;
+
+        const meta = document.createElement('span');
+        meta.className = 'suave';
+        meta.textContent = formatearTamano(archivo.size) + (activo ? ' · Seleccionado' : '');
+
+        li.append(nombre, meta);
+        li.addEventListener('click', () => alternarSeleccion(id));
+        li.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                alternarSeleccion(id);
+            }
+        });
+        lista.appendChild(li);
+    }
+
+    $('lista-vacia').hidden = biblioteca.length > 0;
+    $('btn-quitar').disabled = seleccionadoId === null;
+}
+
+// Elegir otro video lo cambia; volver a pulsar el seleccionado lo quita.
+function alternarSeleccion(id) {
+    const nuevo = seleccionadoId === id ? null : id;
+    aplicarSeleccion(biblioteca.find((v) => v.id === nuevo) ?? null);
+    renderizarLista();
+}
+
+$('btn-quitar').addEventListener('click', () => {
+    aplicarSeleccion(null);
+    renderizarLista();
+});
+
+// URL reproducible de un video de la biblioteca (se crea una sola vez por video).
+function urlDe(entrada) {
+    entrada.url ??= URL.createObjectURL(entrada.archivo);
+    return entrada.url;
+}
+
+// ---------- Visor central ----------
+
+// Muestra el video elegido en el visor central, o el recuadro vacío si es null.
+function aplicarSeleccion(entrada) {
+    seleccionadoId = entrada?.id ?? null;
 
     const video = $('preview');
-    video.src = urlVideo;
-    video.load();
-    video.hidden = false;
-
-    $('archivo-nombre').textContent = `Video seleccionado: ${archivo.name}`;
-    $('archivo-nombre').hidden = false;
-    $('btn-analizar').disabled = false;
     $('resultados').hidden = true;
     ocultarError();
-});
+
+    if (!entrada) {
+        video.pause();
+        video.removeAttribute('src');
+        video.removeAttribute('data-id');
+        video.load();
+        video.hidden = true;
+        $('visor-vacio').hidden = false;
+        $('archivo-nombre').hidden = true;
+        $('btn-analizar').disabled = true;
+        return;
+    }
+
+    if (video.dataset.id !== String(entrada.id)) {
+        video.src = urlDe(entrada);
+        video.dataset.id = String(entrada.id);
+        video.load();
+    }
+    video.hidden = false;
+    $('visor-vacio').hidden = true;
+
+    $('archivo-nombre').textContent = `Video seleccionado: ${entrada.archivo.name}`;
+    $('archivo-nombre').hidden = false;
+    $('btn-analizar').disabled = false;
+}
+
+function formatearTamano(bytes) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Mientras se analiza, no se puede cambiar de video ni de ajustes.
+function bloquearPaneles(bloquear) {
+    $('panel-videos').inert = bloquear;
+    $('panel-ajustes').inert = bloquear;
+}
 
 $('btn-analizar').addEventListener('click', async () => {
     const boton = $('btn-analizar');
     boton.disabled = true;
+    bloquearPaneles(true);
     ocultarError();
     $('resultados').hidden = true;
 
     try {
         const fps = parseFloat($('fps').value);
-        const frames = await analizarVideo($('preview'), fps);
+        const maxFrames = parseInt($('max-frames').value, 10);
+        const ajustes = leerAjustes();
+        const frames = await analizarVideo($('preview'), fps, ajustes, maxFrames);
         const resumen = agregarResultados(frames);
         mostrarResultados(resumen);
     } catch (err) {
         mostrarError(err.message);
     } finally {
         boton.disabled = false;
+        bloquearPaneles(false);
         $('progreso-bloque').hidden = true;
     }
 });
 
-$('btn-health').addEventListener('click', async () => {
-    const estado = $('estado-servicios');
-    try {
-        const res = await fetch(`${API}?servicio=health`);
-        const datos = await res.json();
-        estado.textContent = `Backend: ${datos.backend} · Motor: ${datos.motor}`;
-    } catch (err) {
-        estado.textContent = 'No se pudo contactar el backend.';
+// ---------- Ajustes de detección (panel derecho) ----------
+
+// Valores de los controles en porcentaje (se convierten a 0–1 al enviarlos).
+const AJUSTES_POR_DEFECTO = { confianza: 50, iou: 70, tamano: 640 };
+
+function construirClases() {
+    const lista = $('clases-lista');
+    const ordenadas = Object.entries(TRADUCCIONES)
+        .sort((a, b) => a[1].localeCompare(b[1], 'es'));
+
+    for (const [ingles, espanol] of ordenadas) {
+        const etiqueta = document.createElement('label');
+        etiqueta.className = 'clase-opcion';
+
+        const casilla = document.createElement('input');
+        casilla.type = 'checkbox';
+        casilla.value = ingles;
+        casilla.addEventListener('change', actualizarResumenClases);
+
+        etiqueta.append(casilla, ` ${espanol}`);
+        lista.appendChild(etiqueta);
     }
-});
+}
 
-// ---------- Extracción de frames ----------
+function clasesSeleccionadas() {
+    return [...document.querySelectorAll('#clases-lista input:checked')].map((c) => c.value);
+}
 
-async function analizarVideo(video, fps) {
+function actualizarResumenClases() {
+    const n = clasesSeleccionadas().length;
+    $('clases-resumen').textContent = n === 0 ? 'todas' : `${n} seleccionada(s)`;
+}
+
+function actualizarSalidas() {
+    $('confianza-valor').textContent = `${$('confianza').value}%`;
+    $('iou-valor').textContent = `${$('iou').value}%`;
+}
+
+// Lee los controles y los devuelve con los valores que entiende el motor.
+function leerAjustes() {
+    return {
+        confianza: Number($('confianza').value) / 100,
+        iou: Number($('iou').value) / 100,
+        tamano: parseInt($('tamano').value, 10),
+        clases: clasesSeleccionadas(),
+    };
+}
+
+function restablecerAjustes() {
+    $('confianza').value = AJUSTES_POR_DEFECTO.confianza;
+    $('iou').value = AJUSTES_POR_DEFECTO.iou;
+    $('tamano').value = String(AJUSTES_POR_DEFECTO.tamano);
+    for (const casilla of document.querySelectorAll('#clases-lista input')) {
+        casilla.checked = false;
+    }
+    actualizarSalidas();
+    actualizarResumenClases();
+}
+
+$('confianza').addEventListener('input', actualizarSalidas);
+$('iou').addEventListener('input', actualizarSalidas);
+$('btn-restablecer').addEventListener('click', restablecerAjustes);
+
+construirClases();
+restablecerAjustes();
+
+// ---------- Extracción de frames y análisis ----------
+
+async function analizarVideo(video, fps, ajustes, maxFrames) {
     await esperarMetadatos(video);
 
     const duracion = video.duration;
@@ -88,36 +238,55 @@ async function analizarVideo(video, fps) {
     }
 
     const paso = 1 / fps;
-    const totalFrames = Math.min(Math.floor(duracion * fps) + 1, MAX_FRAMES);
-    const canvas = crearCanvas(video);
+    const framesDisponibles = Math.floor(duracion * fps) + 1;
+    const totalFrames = Math.min(framesDisponibles, maxFrames);
+    const canvas = crearCanvas(video, ajustes.tamano);
 
     $('progreso-bloque').hidden = false;
-    const frames = [];
+    actualizarProgreso(0, totalFrames);
 
+    const frames = new Array(totalFrames);
+    const enCurso = new Set();
+    let completados = 0;
+    let error = null;
+
+    // Los frames se capturan en orden (el video se busca instante a instante),
+    // pero sus peticiones al motor se envían en paralelo, hasta CONCURRENCIA a la vez.
     for (let i = 0; i < totalFrames; i++) {
         const tiempo = Math.min(i * paso, duracion);
         const blob = await capturarFrame(video, canvas, tiempo);
-        const detecciones = await detectar(blob);
 
-        const aceptadas = filtrarDetecciones(detecciones);
-        frames.push({
-            tiempo,
-            conteo: contarClases(aceptadas),
-            detecciones: aceptadas,
-        });
+        while (enCurso.size >= CONCURRENCIA && !error) {
+            await Promise.race(enCurso);
+        }
+        if (error) break;
 
-        const porcentaje = Math.round(((i + 1) / totalFrames) * 100);
-        $('progreso').value = porcentaje;
-        $('progreso-texto').textContent =
-            `Analizando frame ${i + 1} de ${totalFrames} (${formatearTiempo(tiempo)})`;
+        const tarea = detectar(blob, ajustes)
+            .then((detecciones) => {
+                const aceptadas = filtrarDetecciones(detecciones, ajustes.confianza);
+                frames[i] = { tiempo, conteo: contarClases(aceptadas), detecciones: aceptadas };
+                completados++;
+                actualizarProgreso(completados, totalFrames);
+            })
+            .catch((err) => { error ??= err; })
+            .finally(() => enCurso.delete(tarea));
+        enCurso.add(tarea);
     }
 
-    if (Math.floor(duracion * fps) + 1 > MAX_FRAMES) {
+    await Promise.all(enCurso);
+    if (error) throw error;
+
+    if (framesDisponibles > maxFrames) {
         $('progreso-texto').textContent +=
-            ` · Se analizaron solo los primeros ${MAX_FRAMES} frames.`;
+            ` · Se analizaron solo los primeros ${maxFrames} frames.`;
     }
 
     return frames;
+}
+
+function actualizarProgreso(hechos, total) {
+    $('progreso').value = total > 0 ? Math.round((hechos / total) * 100) : 0;
+    $('progreso-texto').textContent = `Frames analizados: ${hechos} de ${total}`;
 }
 
 function esperarMetadatos(video) {
@@ -138,9 +307,12 @@ function esperarEvento(elemento, evento) {
     });
 }
 
-function crearCanvas(video) {
+// El ancho del frame sigue al tamaño de análisis: más resolución de entrada
+// solo sirve si el frame enviado tiene esa resolución.
+function crearCanvas(video, ancho) {
     const canvas = document.createElement('canvas');
-    const escala = Math.min(1, ANCHO_MAXIMO / video.videoWidth);
+    const destino = Math.min(ancho, ANCHO_MAXIMO_FRAME);
+    const escala = Math.min(1, destino / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * escala);
     canvas.height = Math.round(video.videoHeight * escala);
     return canvas;
@@ -163,25 +335,36 @@ async function capturarFrame(video, canvas, tiempo) {
 
 // ---------- Comunicación con el backend ----------
 
-async function detectar(blob) {
+async function detectar(blob, ajustes) {
     const formData = new FormData();
     formData.append('file', blob, 'frame.jpg');
+    formData.append('confianza', String(ajustes.confianza));
+    formData.append('iou', String(ajustes.iou));
+    formData.append('tamano', String(ajustes.tamano));
+    if (ajustes.clases.length > 0) {
+        formData.append('clases', ajustes.clases.join(','));
+    }
 
     const res = await fetch(`${API}?servicio=detect`, { method: 'POST', body: formData });
     if (!res.ok) {
         throw new Error(`El servicio de detección respondió con error ${res.status}.`);
     }
 
+    // El backend responde 200 aunque el motor rechace la petición; hay que revisarlo.
     const datos = await res.json();
+    if (datos.codigo_motor !== 200) {
+        const detalle = datos.resultado?.detail;
+        throw new Error(`El motor rechazó el análisis: ${typeof detalle === 'string' ? detalle : 'parámetros no válidos'}.`);
+    }
     return datos.resultado?.detecciones ?? [];
 }
 
 // ---------- Agregación de resultados ----------
 
-// Deja solo las detecciones que superan la confianza mínima interna.
-function filtrarDetecciones(detecciones) {
+// Deja solo las detecciones que superan la confianza mínima elegida.
+function filtrarDetecciones(detecciones, confianzaMinima) {
     return detecciones
-        .filter((d) => !(typeof d.confianza === 'number' && d.confianza < CONFIANZA_MINIMA))
+        .filter((d) => !(typeof d.confianza === 'number' && d.confianza < confianzaMinima))
         .map((d) => ({
             clase: String(d.clase ?? 'desconocido'),
             confianza: typeof d.confianza === 'number' ? d.confianza : null,
@@ -288,7 +471,7 @@ function mostrarResultados(resumen) {
     $('resultados').hidden = false;
 }
 
-// Muestra solo la vista elegida en el selector (conteo o reporte).
+// Muestra solo la vista elegida (conteo o reporte).
 function aplicarTipoResultado() {
     const reporte = $('tipo-resultado').value === 'reporte';
     $('vista-conteo').hidden = reporte;

@@ -12,117 +12,173 @@
         <p>Sube un video y te diremos qué objetos aparecen en él y cuántos se detectaron.</p>
     </header>
 
-    <main class="contenedor">
-        <!-- Carga del video -->
-        <section class="tarjeta">
-            <h2>1. Selecciona un video</h2>
-            <input type="file" id="video-input" accept="video/*">
-            <p id="archivo-nombre" class="suave" hidden></p>
+    <main class="diseno">
+        <!-- Izquierda: biblioteca de videos -->
+        <aside id="panel-videos" class="tarjeta columna panel-videos">
+            <h2>Videos</h2>
 
-            <video id="preview" class="preview" controls preload="auto" playsinline hidden></video>
+            <label class="boton secundario boton-agregar">
+                Agregar videos desde mi equipo
+                <input type="file" id="video-input" class="input-oculto" accept="video/*" multiple>
+            </label>
 
-            <div class="opciones">
-                <label>
-                    Frames por segundo a analizar
-                    <select id="fps">
-                        <option value="0.5">0.5 (más rápido)</option>
-                        <option value="1" selected>1 (recomendado)</option>
-                        <option value="2">2 (más detallado)</option>
-                    </select>
-                </label>
-            </div>
+            <p id="lista-vacia" class="suave">Aún no hay videos. Usa “Agregar videos desde mi equipo”.</p>
+            <ul id="lista-videos" class="lista-videos" role="listbox" aria-label="Videos disponibles"></ul>
 
-            <button id="btn-analizar" class="boton" disabled>Analizar video</button>
+            <button id="btn-quitar" class="boton secundario" disabled>Quitar selección</button>
+        </aside>
 
-            <div id="progreso-bloque" hidden>
-                <progress id="progreso" value="0" max="100"></progress>
-                <p id="progreso-texto" class="suave"></p>
-            </div>
-            <p id="error" class="error" hidden></p>
-        </section>
+        <!-- Centro: video seleccionado y resultados -->
+        <div class="columna centro">
+            <section class="tarjeta">
+                <h2>Video seleccionado</h2>
+                <p id="archivo-nombre" class="suave" hidden></p>
 
-        <!-- Resultados -->
-        <section id="resultados" class="tarjeta" hidden>
-            <div class="cabecera-resultados">
-                <h2>2. Resultados</h2>
-                <label>
-                    Tipo de resultado
-                    <select id="tipo-resultado">
-                        <option value="conteo" selected>Conteo</option>
-                        <option value="reporte">Reporte</option>
-                    </select>
-                </label>
-            </div>
+                <div id="visor-vacio" class="visor-vacio suave">Selecciona un video de la lista para visualizarlo aquí.</div>
+                <video id="preview" class="preview" controls preload="auto" playsinline hidden></video>
 
-            <!-- Vista: conteo -->
-            <div id="vista-conteo">
-                <div class="metricas">
-                    <div class="metrica">
-                        <span class="metrica-valor" id="total-objetos">0</span>
-                        <span class="metrica-etiqueta">Objetos detectados</span>
-                    </div>
-                    <div class="metrica">
-                        <span class="metrica-valor" id="total-clases">0</span>
-                        <span class="metrica-etiqueta">Tipos de objeto</span>
-                    </div>
-                    <div class="metrica">
-                        <span class="metrica-valor" id="total-frames">0</span>
-                        <span class="metrica-etiqueta">Frames analizados</span>
-                    </div>
+                <button id="btn-analizar" class="boton analizar" disabled>Analizar video</button>
+
+                <div id="progreso-bloque" hidden>
+                    <progress id="progreso" value="0" max="100"></progress>
+                    <p id="progreso-texto" class="suave"></p>
+                </div>
+                <p id="error" class="error" hidden></p>
+            </section>
+
+            <!-- Resultados -->
+            <section id="resultados" class="tarjeta" hidden>
+                <div class="cabecera-resultados">
+                    <h2>Resultados</h2>
+                    <label>
+                        Tipo de resultado
+                        <select id="tipo-resultado">
+                            <option value="conteo" selected>Conteo</option>
+                            <option value="reporte">Reporte</option>
+                        </select>
+                    </label>
                 </div>
 
-                <h3>Descripción</h3>
-                <p id="descripcion" class="descripcion"></p>
+                <!-- Vista: conteo -->
+                <div id="vista-conteo">
+                    <div class="metricas">
+                        <div class="metrica">
+                            <span class="metrica-valor" id="total-objetos">0</span>
+                            <span class="metrica-etiqueta">Objetos detectados</span>
+                        </div>
+                        <div class="metrica">
+                            <span class="metrica-valor" id="total-clases">0</span>
+                            <span class="metrica-etiqueta">Tipos de objeto</span>
+                        </div>
+                        <div class="metrica">
+                            <span class="metrica-valor" id="total-frames">0</span>
+                            <span class="metrica-etiqueta">Frames analizados</span>
+                        </div>
+                    </div>
 
-                <h3>Conteo por tipo de objeto</h3>
-                <div class="tabla-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Objeto</th>
-                                <th>Máximo a la vez</th>
-                                <th>Apariciones</th>
-                                <th>Visible entre</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-conteo"></tbody>
-                    </table>
+                    <h3>Descripción</h3>
+                    <p id="descripcion" class="descripcion"></p>
+
+                    <h3>Conteo por tipo de objeto</h3>
+                    <div class="tabla-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Objeto</th>
+                                    <th>Máximo a la vez</th>
+                                    <th>Apariciones</th>
+                                    <th>Visible entre</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-conteo"></tbody>
+                        </table>
+                    </div>
+
+                    <p class="suave nota">
+                        "Máximo a la vez" es el mayor número de objetos de un mismo tipo visibles en un mismo frame.
+                        Es una aproximación: sin seguimiento entre frames, un mismo objeto puede contarse una sola vez
+                        aunque aparezca en varios.
+                    </p>
                 </div>
 
-                <p class="suave nota">
-                    "Máximo a la vez" es el mayor número de objetos de un mismo tipo visibles en un mismo frame.
-                    Es una aproximación: sin seguimiento entre frames, un mismo objeto puede contarse una sola vez
-                    aunque aparezca en varios.
-                </p>
-            </div>
+                <!-- Vista: reporte -->
+                <div id="vista-reporte" hidden>
+                    <h3>Descripción</h3>
+                    <p id="descripcion-reporte" class="descripcion"></p>
 
-            <!-- Vista: reporte -->
-            <div id="vista-reporte" hidden>
-                <h3>Descripción</h3>
-                <p id="descripcion-reporte" class="descripcion"></p>
-
-                <h3>Objetos encontrados</h3>
-                <p id="total-reporte" class="suave"></p>
-                <div class="tabla-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tiempo</th>
-                                <th>Objeto</th>
-                                <th>Confianza</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-reporte"></tbody>
-                    </table>
+                    <h3>Objetos encontrados</h3>
+                    <p id="total-reporte" class="suave"></p>
+                    <div class="tabla-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tiempo</th>
+                                    <th>Objeto</th>
+                                    <th>Confianza</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-reporte"></tbody>
+                        </table>
+                    </div>
                 </div>
+            </section>
+        </div>
+
+        <!-- Derecha: ajustes -->
+        <aside id="panel-ajustes" class="tarjeta columna panel-ajustes">
+            <h2>Ajustes</h2>
+
+            <div class="ajuste">
+                <label for="fps">Frames por segundo a analizar</label>
+                <select id="fps">
+                    <option value="0.5">0.5 (más rápido)</option>
+                    <option value="1" selected>1 (recomendado)</option>
+                    <option value="2">2 (más detallado)</option>
+                    <option value="4">4 (muy detallado)</option>
+                </select>
             </div>
-        </section>
+
+            <div class="ajuste">
+                <label for="max-frames">Máximo de frames a analizar</label>
+                <select id="max-frames">
+                    <option value="300">300</option>
+                    <option value="600" selected>600</option>
+                    <option value="1200">1200</option>
+                    <option value="2400">2400 (videos largos, tarda más)</option>
+                </select>
+            </div>
+
+            <div class="ajuste">
+                <label for="confianza">Confianza mínima <output id="confianza-valor">50%</output></label>
+                <input type="range" id="confianza" min="5" max="95" step="5" value="50">
+                <span class="suave">Más alto = menos falsos positivos, pero puede perder objetos.</span>
+            </div>
+
+            <div class="ajuste">
+                <label for="iou">Umbral de solapamiento (IoU) <output id="iou-valor">70%</output></label>
+                <input type="range" id="iou" min="10" max="90" step="5" value="70">
+                <span class="suave">Más alto = permite cajas más encimadas entre sí.</span>
+            </div>
+
+            <div class="ajuste">
+                <label for="tamano">Tamaño de análisis</label>
+                <select id="tamano">
+                    <option value="480">480 (rápido)</option>
+                    <option value="640" selected>640 (recomendado)</option>
+                    <option value="960">960 (detallado)</option>
+                    <option value="1280">1280 (muy detallado, lento)</option>
+                </select>
+                <span class="suave">Mejora los objetos pequeños a costa de velocidad.</span>
+            </div>
+
+            <details class="clases">
+                <summary>Clases a detectar <span id="clases-resumen" class="suave">todas</span></summary>
+                <div id="clases-lista" class="clases-lista"></div>
+            </details>
+
+            <button id="btn-restablecer" class="boton secundario" type="button">Restablecer ajustes</button>
+        </aside>
     </main>
-
-    <footer class="pie">
-        <button id="btn-health" class="boton secundario">Comprobar servicios</button>
-        <span id="estado-servicios" class="suave"></span>
-    </footer>
 
     <script src="js/app.js"></script>
 </body>

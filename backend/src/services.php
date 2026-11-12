@@ -48,12 +48,21 @@ function servicioDetect(string $motorUrl): array
     }
 
     $archivo = $_FILES['file'];
+
+    // Ajustes de detección opcionales; solo se reenvían los campos permitidos.
+    $campos = [
+        'file' => new CURLFile($archivo['tmp_name'], $archivo['type'], $archivo['name']),
+    ];
+    foreach (['confianza', 'iou', 'tamano', 'max_det', 'clases'] as $ajuste) {
+        if (isset($_POST[$ajuste])) {
+            $campos[$ajuste] = (string) $_POST[$ajuste];
+        }
+    }
+
     $ch = curl_init($motorUrl . '/detect');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => [
-            'file' => new CURLFile($archivo['tmp_name'], $archivo['type'], $archivo['name']),
-        ],
+        CURLOPT_POSTFIELDS     => $campos,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 60,
     ]);

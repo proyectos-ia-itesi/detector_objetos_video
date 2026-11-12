@@ -26,7 +26,8 @@ services:
     environment:
       MOTOR_URL: http://motor:8000
     depends_on:
-      - motor
+      motor:
+        condition: service_healthy
     networks:
       - app-net
     restart: unless-stopped
@@ -46,11 +47,22 @@ services:
     build: ./motor
     container_name: dov-motor
     environment:
-      MODEL_PATH: /app/models/modelo.pt
+      MODEL_PATH: /app/models/modelo.pt   # pesos propios (opcional)
+      MODEL_NAME: yolo26x.pt              # preentrenado si no hay pesos propios (el más grande de YOLO26)
+      CONF_MINIMA: "0.25"
+      IMGSZ: "640"
     volumes:
-      - ./motor/models:/app/models
+      - ./motor/models:/app/models        # pesos y caché de modelos (no se versionan)
+    ports:
+      - "127.0.0.1:8000:8000"             # solo local, para probar el motor directamente
     networks:
       - app-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     restart: unless-stopped
 
 volumes:

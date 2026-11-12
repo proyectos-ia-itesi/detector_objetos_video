@@ -1,0 +1,55 @@
+# ---------- Motor de IA (Python) ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Pesos y modelos: pueden pesar cientos de MB. Se conserva solo el marcador.
+motor/models/*
+!motor/models/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+*.mlmodel
+
+# Salidas de Ultralytics (predicciones, entrenamientos, caché)
+runs/
+weights/
+.ultralytics/
+
+# ---------- Variables de entorno y secretos ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Base de datos local ----------
+db/data/
+*.sql.gz
+*.sqlite
+*.sqlite3
+
+# ---------- Frontend / PHP ----------
+node_modules/
+vendor/
+
+# ---------- Videos y pruebas de carga ----------
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# ---------- Editores y sistema ----------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---------- Logs ----------
+*.log

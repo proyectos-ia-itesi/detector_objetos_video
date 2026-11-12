@@ -1,3 +1,11 @@
+# API
 fastapi==0.115.0
 uvicorn==0.30.6
 python-multipart==0.0.9
+
+# Inferencia (YOLO). torch/torchvision se instalan en la versión CPU
+# desde el Dockerfile (ver motor/Dockerfile); aquí quedan fijadas para
+# que pip no reemplace esas versiones por las de CUDA.
+torch==2.14.1
+torchvision==0.29.1
+ultralytics==8.4.211

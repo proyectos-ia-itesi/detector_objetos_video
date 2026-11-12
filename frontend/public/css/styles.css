@@ -49,19 +49,47 @@ body {
 [hidden] { display: none !important; }
 
 .encabezado {
-    padding: 2rem 16px 1rem;
+    padding: 1.5rem 16px 1rem;
     text-align: center;
 }
 .encabezado h1 { margin: 0 0 .25rem; font-size: 1.75rem; }
 .encabezado p { margin: 0; color: var(--suave); }
 
-.contenedor {
-    max-width: 880px;
+/* ---------- Disposición en tres columnas ---------- */
+
+.diseno {
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 0 16px;
+    padding: 0 16px 32px;
     display: grid;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(240px, 300px);
     gap: 16px;
+    align-items: start;
 }
+
+.columna {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.panel-videos,
+.panel-ajustes {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+}
+
+/* En pantallas estrechas: una sola columna, en el orden videos, centro y ajustes. */
+@media (max-width: 1024px) {
+    .diseno { grid-template-columns: minmax(0, 1fr); }
+    .panel-videos,
+    .panel-ajustes { position: static; max-height: none; overflow: visible; }
+}
+
+/* ---------- Tarjetas y encabezados ---------- */
 
 .tarjeta {
     background: var(--tarjeta);
@@ -69,7 +97,7 @@ body {
     border-radius: 12px;
     padding: 20px;
 }
-.tarjeta h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.tarjeta h2 { margin: 0 0 12px; font-size: 1.1rem; }
 .tarjeta h3 { margin: 20px 0 8px; font-size: 1rem; }
 
 .cabecera-resultados {
@@ -89,37 +117,8 @@ body {
     color: var(--suave);
 }
 
-input[type="file"] {
-    width: 100%;
-    padding: 10px;
-    border: 1px dashed var(--borde);
-    border-radius: 8px;
-    background: var(--fondo);
-    color: var(--texto);
-}
+/* ---------- Controles generales ---------- */
 
-.preview {
-    display: block;
-    width: 100%;
-    max-height: 360px;
-    margin-top: 14px;
-    border-radius: 8px;
-    background: #000;
-}
-
-.opciones {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 20px;
-    margin: 16px 0;
-}
-.opciones label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: .9rem;
-    color: var(--suave);
-}
 select {
     padding: 8px;
     border-radius: 8px;
@@ -127,6 +126,7 @@ select {
     background: var(--fondo);
     color: var(--texto);
     font: inherit;
+    width: 100%;
 }
 
 .boton {
@@ -146,6 +146,7 @@ select {
     color: var(--primario);
     border: 1px solid var(--primario);
 }
+.boton.analizar { width: 100%; margin-top: 16px; }
 
 progress {
     width: 100%;
@@ -157,9 +158,82 @@ progress {
 .nota { margin-top: 16px; }
 .error { color: var(--error); font-weight: 600; }
 
+/* ---------- Biblioteca de videos (izquierda) ---------- */
+
+.input-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.boton-agregar {
+    display: block;
+    position: relative;
+    cursor: pointer;
+    text-align: center;
+}
+
+.lista-videos {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    min-height: 0;
+}
+
+.video-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.video-item:hover { border-color: var(--primario); }
+.video-item:focus-visible { outline: 2px solid var(--primario); outline-offset: 2px; }
+.video-item.seleccionado {
+    border-color: var(--primario);
+    box-shadow: inset 0 0 0 1px var(--primario);
+}
+
+.video-nombre { font-weight: 600; word-break: break-all; }
+
+#btn-quitar { width: 100%; }
+
+/* ---------- Visor (centro) ---------- */
+
+.visor-vacio {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    border: 1px dashed var(--borde);
+    border-radius: 8px;
+    background: var(--fondo);
+    text-align: center;
+    padding: 16px;
+}
+
+.preview {
+    display: block;
+    width: 100%;
+    max-height: 420px;
+    border-radius: 8px;
+    background: #000;
+}
+
+#archivo-nombre { margin: 0 0 10px; word-break: break-all; }
+
+/* ---------- Resultados (centro) ---------- */
+
 .metricas {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 12px;
 }
 .metrica {
@@ -198,22 +272,32 @@ th, td {
 }
 th { color: var(--suave); font-weight: 600; }
 
-.linea-tiempo {
-    margin: 0;
-    padding-left: 20px;
-    max-height: 260px;
+/* ---------- Ajustes (derecha) ---------- */
+
+.ajuste {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: .9rem;
+}
+.ajuste label { font-weight: 600; }
+.ajuste output { font-weight: 700; color: var(--primario); }
+.ajuste input[type="range"] { width: 100%; accent-color: var(--primario); }
+
+.clases { margin-bottom: 16px; }
+.clases summary { cursor: pointer; font-weight: 600; }
+.clases-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 6px 10px;
+    margin-top: 10px;
+    max-height: 240px;
     overflow-y: auto;
 }
-.linea-tiempo li { padding: 2px 0; }
+.clase-opcion { font-size: .9rem; display: flex; align-items: center; gap: 4px; }
 
-.pie {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    justify-content: center;
-    padding: 24px 16px 32px;
-}
+#btn-restablecer { width: 100%; }
 
 @media (max-width: 480px) {
     .encabezado h1 { font-size: 1.4rem; }
