@@ -1,6 +1,6 @@
 # Base de datos (`db/`)
 
-Base de datos MySQL 8.4 para guardar los análisis. El esquema está definido en `init.sql`, pero **el backend todavía no escribe en ella**: por ahora el sistema funciona sin persistencia y los resultados solo se muestran en pantalla.
+Base de datos MySQL 8.4 para guardar los análisis. El esquema está definido en `init.sql`, pero el backend la escribe en cada análisis de frame (`servicio=detect`).
 
 ---
 
@@ -15,16 +15,57 @@ Base de datos MySQL 8.4 para guardar los análisis. El esquema está definido en
 
 ## Esquema
 
-Base de datos: `deteccion_objetos` (utf8mb4, `utf8mb4_unicode_ci`).
+Base de datos: `deteccion_objetos` (utf8mb4, `utf8mb4_unicode_ci`). Relación entre tablas:
+
+```
+archivos (1) ──< reportes (1) ──< imagenes (1) ──< detecciones
+```
+
+Al borrar un archivo se borran sus reportes, sus frames y sus detecciones (`ON DELETE CASCADE`).
+
+### Tabla `archivos`
+
+Un registro por video subido. El archivo está en el volumen `videos-data` del backend.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | `INT UNSIGNED`, clave primaria | Identificador. |
+| `clave_unica` | `CHAR(36)`, única | UUID v4 que identifica el video; es también el nombre de su carpeta. |
+| `nombre_original` | `VARCHAR(255)` | Nombre con el que se subió el video. |
+| `nombre_guardado` | `VARCHAR(255)` | Nombre con el que quedó en disco (sin caracteres problemáticos). |
+| `ruta` | `VARCHAR(500)` | Ruta completa, por ejemplo `/var/www/uploads/<clave_unica>/<nombre_guardado>`. |
+| `tamano_bytes` | `BIGINT UNSIGNED` | Tamaño del video. |
+| `tipo_mime` | `VARCHAR(100)` | Tipo detectado a partir del contenido, por ejemplo `video/mp4`. |
+| `creado_en` | `TIMESTAMP` | Momento del registro. |
+
+### Tabla `reportes`
+
+Un registro por cada análisis de un video, con los ajustes usados y su resumen.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | `INT UNSIGNED`, clave primaria | Identificador. |
+| `archivo_id` | `INT UNSIGNED` | Video analizado. Clave foránea a `archivos(id)`. |
+| `fps`, `max_frames` | `DECIMAL(4,2)`, `INT UNSIGNED` | Frames por segundo y tope de frames del análisis. |
+| `confianza`, `iou` | `DECIMAL(3,2)` | Confianza mínima y umbral de solapamiento (0 a 1). |
+| `tamano` | `SMALLINT UNSIGNED` | Tamaño de análisis. |
+| `clases` | `VARCHAR(500)`, opcional | Clases filtradas, separadas por coma. Vacío = todas. |
+| `estado` | `ENUM('en_curso', 'completado')` | Estado del análisis. |
+| `frames_analizados`, `total_detecciones` | `INT UNSIGNED` | Calculados al cerrar el reporte. |
+| `resumen` | `JSON`, opcional | Resumen del análisis (conteo máximo y apariciones por clase, y línea de tiempo). |
+| `ruta_archivo` | `VARCHAR(500)`, opcional | Ruta del JSON del reporte en `backend/reports` (dentro del contenedor, `/var/www/reports/…`). |
+| `creado_en`, `finalizado_en` | `TIMESTAMP` | Apertura y cierre del reporte. |
 
 ### Tabla `imagenes`
 
-Un registro por imagen enviada al motor.
+Frames enviados al motor (`imagenes`):
 
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | `INT UNSIGNED`, clave primaria, autoincremental | Identificador. |
-| `nombre_archivo` | `VARCHAR(255)`, obligatorio | Nombre original del archivo. |
+| `reporte_id` | `INT UNSIGNED`, opcional | Reporte al que pertenece el frame. |
+| `nombre_archivo` | `VARCHAR(255)`, obligatorio | Nombre del archivo enviado (`frame.jpg`). |
+| `instante_seg` | `DECIMAL(10,3)`, opcional | Segundo del video en que se tomó el frame. |
 | `tamano_bytes` | `INT UNSIGNED`, obligatorio | Tamaño de la imagen. |
 | `creado_en` | `TIMESTAMP`, por defecto la fecha actual | Momento del registro. |
 
@@ -44,6 +85,7 @@ Una fila por cada objeto detectado en una imagen.
 Relaciones e índices:
 
 - `imagen_id` es clave foránea a `imagenes(id)` con **`ON DELETE CASCADE`**: al borrar una imagen se borran sus detecciones.
+- `imagenes.reporte_id` es clave foránea a `reportes(id)` con **`ON DELETE CASCADE`**.
 - Índice `idx_detecciones_imagen` sobre `imagen_id`, para obtener las detecciones de una imagen.
 - Índice `idx_detecciones_clase` sobre `clase`, para consultas por tipo de objeto.
 
@@ -98,8 +140,21 @@ docker exec -it dov-db mysql -uroot -p -e "SHOW TABLES;" deteccion_objetos
 
 ---
 
-## Estado actual y próximos pasos
+## Migraciones
 
-- El esquema está creado y el usuario `dov_app` tiene los permisos necesarios.
-- El backend no inserta datos todavía. Para conectarlo habría que añadir a `services.php` la inserción en `imagenes` y `detecciones` tras cada análisis, o, mejor, guardar un análisis completo (un video con sus frames) a partir de un nuevo endpoint.
-- Un análisis de video produce muchas filas en `detecciones`; conviene guardar en lote en lugar de insertar una a una.
+`database/init.sql` solo se ejecuta en un volumen vacío. Para una base de datos ya creada, aplica los cambios de `migrations/`, en orden y una sola vez:
+
+```bash
+docker exec -i dov-db mysql -uroot -p deteccion_objetos < db/migrations/001_archivos_reportes.sql
+```
+
+| Migración | Qué añade |
+|---|---|
+| `001_archivos_reportes.sql` | Tablas `archivos` y `reportes`; columnas `reporte_id` e `instante_seg` en `imagenes`. |
+| `002_clave_unica_archivos.sql` | Columnas `clave_unica` (única) y `nombre_guardado` en `archivos`. |
+| `003_ruta_reportes.sql` | Columna `ruta_archivo` en `reportes`. |
+
+## Estado actual
+
+- El backend guarda el video (`archivos`), el análisis (`reportes`), cada frame con su instante (`imagenes`) y sus objetos (`detecciones`).
+- Todo se escribe en una transacción; si la base de datos no responde, el backend devuelve `503`.

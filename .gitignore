@@ -53,3 +53,10 @@ Thumbs.db
 
 # ---------- Logs ----------
 *.log
+
+# ---------- Datos generados por el backend ----------
+# Videos subidos y reportes: se conservan en disco, pero no se versionan.
+backend/videos/*
+!backend/videos/.gitkeep
+backend/reports/*
+!backend/reports/.gitkeep

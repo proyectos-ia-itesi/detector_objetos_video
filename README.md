@@ -29,24 +29,22 @@ flowchart LR
     U[Navegador] -->|HTTP :8080| F[frontend<br/>Apache httpd]
     F -->|/api/ proxy| B[backend<br/>PHP 8.3 + Apache]
     B -->|HTTP interno :8000| M[motor<br/>FastAPI + YOLO26x]
-    B -.->|pendiente| D[(db<br/>MySQL 8.4)]
+    B -->|PDO| D[(db<br/>MySQL 8.4)]
     M --- V[(motor/models<br/>pesos del modelo)]
 ```
-
-Las líneas punteadas indican lo que todavía no está conectado (ver [Estado actual](#estado-actual)).
 
 | Servicio | Tecnología | Responsabilidad | Puerto |
 |---|---|---|---|
 | `frontend` | Apache 2.4 + HTML, CSS y JavaScript sin dependencias | Interfaz; extrae frames con `<video>` y `<canvas>`; hace proxy de `/api/` al backend | `8080` (host) |
 | `backend` | PHP 8.3 + Apache | API de entrada única (`services.php?servicio=…`); reenvía las imágenes y ajustes al motor con cURL | interno |
 | `motor` | Python 3.12 + FastAPI + Ultralytics YOLO26x (CPU) | Carga el modelo y ejecuta la detección de objetos | `127.0.0.1:8000` (solo local) |
-| `db` | MySQL 8.4 | Esquema `imagenes` y `detecciones` (aún no se usa) | interno |
+| `db` | MySQL 8.4 | Guarda cada frame analizado (`imagenes`) y sus objetos (`detecciones`) | interno |
 
 ### Flujo de un análisis
 
 1. El usuario agrega videos a la lista de la izquierda y elige uno; se reproduce en el visor central.
 2. En el panel de la derecha ajusta los fps, el máximo de frames, la confianza, el IoU, el tamaño de análisis y las clases.
-3. Al pulsar **Analizar video**, el frontend captura un frame por cada instante y lo envía a `POST /api/services.php?servicio=detect`, hasta 4 peticiones en paralelo.
+3. Al pulsar **Analizar video**, el frontend sube el video (`servicio=subir_video`), que se guarda en el servidor y abre un reporte en la base de datos. Después captura un frame por cada instante y lo envía a `servicio=detect` ligado a ese reporte, hasta 4 peticiones en paralelo. Al terminar cierra el reporte con su resumen (`servicio=finalizar_reporte`).
 4. El backend valida la subida y la reenvía a `POST http://motor:8000/detect` junto con los ajustes.
 5. El motor ejecuta YOLO26x y responde con las detecciones.
 6. El frontend descarta las detecciones por debajo de la confianza elegida, agrega los resultados por frame y muestra conteo, descripción y reporte.
@@ -69,7 +67,9 @@ detector_objetos_video/
 ├── backend/
 │   ├── README.md
 │   ├── Dockerfile          # php:8.3-apache + src/
-│   └── src/services.php    # punto de entrada: health y detect
+│   ├── public/services.php # punto de entrada: solo enruta cada servicio
+│   ├── config/uploads.ini  # límites de subida de videos
+│   └── app/                # lógica: nucleo/, repositorios/, servicios/ (ver backend/README.md)
 ├── motor/
 │   ├── README.md
 │   ├── Dockerfile          # python:3.12-slim + torch CPU + ultralytics
@@ -119,12 +119,12 @@ Implementado:
 - Interfaz en tres columnas: biblioteca de videos, visor y resultados, y ajustes de detección.
 - Análisis configurable: fps, máximo de frames, confianza, IoU, tamaño de entrada y clases.
 - Backend con endpoints `health` y `detect`, con timeouts y manejo de errores.
+- Persistencia: el video (ruta en el servidor), el reporte del análisis, cada frame y sus detecciones se guardan en MySQL.
 - Motor con detección real usando YOLO26x, con modelo configurable y arranque tolerante a fallos.
 - Orquestación con Docker Compose, healthchecks y red interna.
 
 Pendiente:
 
-- **Persistencia:** el backend no escribe en MySQL; el esquema existe pero no se usa.
 - **Credenciales:** las contraseñas de MySQL están en `docker-compose.yml` y `init.sql`. Para producción deben moverse a variables de entorno o secretos.
 - **Pruebas automatizadas:** no hay tests todavía.
 - **Frontend:** `esperarEvento` puede quedarse esperando el evento `seeked` si el instante solicitado coincide con la posición actual del video.

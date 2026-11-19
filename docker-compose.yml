@@ -25,9 +25,18 @@ services:
     container_name: dov-backend
     environment:
       MOTOR_URL: http://motor:8000
+      DB_HOST: db
+      DB_NAME: deteccion_objetos
+      DB_USER: dov_app
+      DB_PASSWORD: dov_app_pass            # mismo valor que init.sql (solo desarrollo)
     depends_on:
       motor:
         condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/videos:/var/www/uploads  # videos subidos (carpeta del proyecto)
+      - ./backend/reports:/var/www/reports # reportes JSON de cada análisis (carpeta del proyecto)
     networks:
       - app-net
     restart: unless-stopped
@@ -39,8 +48,16 @@ services:
       MYSQL_ROOT_PASSWORD: root_pass_dev
     volumes:
       - db-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3307:3306"             # solo local, para MySQL Workbench (3306 lo usa el MySQL del host)
     networks:
       - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   motor:

@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detector de objetos en video</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+    <link rel="stylesheet" href="css/styles.css?v=9">
 </head>
 <body>
     <header class="encabezado">
@@ -103,8 +107,29 @@
 
                 <!-- Vista: reporte -->
                 <div id="vista-reporte" hidden>
+                    <h3>Datos del análisis</h3>
+                    <dl id="ficha-reporte" class="pares"></dl>
+
                     <h3>Descripción</h3>
                     <p id="descripcion-reporte" class="descripcion"></p>
+
+                    <h3>Ajustes usados (para replicar el análisis)</h3>
+                    <dl id="ajustes-reporte" class="pares"></dl>
+
+                    <h3>Máximo de objetos a la vez, por tipo</h3>
+                    <div id="grafica-barras" class="grafica"></div>
+
+                    <h3>Momentos en que aparece cada tipo de objeto</h3>
+                    <div id="grafica-presencia" class="grafica"></div>
+
+                    <h3>Conteo por tipo a lo largo del video</h3>
+                    <div id="grafica-conteo-clases" class="grafica"></div>
+
+                    <h3>Objetos visibles en total a lo largo del video</h3>
+                    <div id="grafica-linea" class="grafica"></div>
+
+                    <h3>Proporción de apariciones por tipo</h3>
+                    <div id="grafica-dona" class="grafica"></div>
 
                     <h3>Objetos encontrados</h3>
                     <p id="total-reporte" class="suave"></p>
@@ -127,6 +152,19 @@
         <!-- Derecha: ajustes -->
         <aside id="panel-ajustes" class="tarjeta columna panel-ajustes">
             <h2>Ajustes</h2>
+
+            <div class="ajuste">
+                <label for="modelo">Modelo</label>
+                <select id="modelo">
+                    <option value="yolo26x.pt" selected>yolo26x (más preciso, lento)</option>
+                    <option value="yolo26m.pt">yolo26m (equilibrado)</option>
+                    <option value="yolo26n.pt">yolo26n (más rápido)</option>
+                </select>
+                <div id="estado-modelo" class="estado-modelo" role="status" aria-live="polite" hidden>
+                    <span class="indicador" aria-hidden="true"></span>
+                    <span id="estado-modelo-texto"></span>
+                </div>
+            </div>
 
             <div class="ajuste">
                 <label for="fps">Frames por segundo a analizar</label>
@@ -180,6 +218,6 @@
         </aside>
     </main>
 
-    <script src="js/app.js"></script>
+    <script src="js/app.js?v=7"></script>
 </body>
 </html>
